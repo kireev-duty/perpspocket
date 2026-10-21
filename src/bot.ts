@@ -4,14 +4,27 @@
 import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
 import { getAddress, isAddress } from "viem";
 import { appConfig } from "./config.js";
-import { users, trades, triggers, type User } from "./db.js";
+import { users, trades, triggers, follows, groups, userByName, type User } from "./db.js";
 import * as engine from "./engine.js";
 import { UserError } from "./engine.js";
 import { pnlCard, fmtPrice } from "./card.js";
+import { afterOpen, afterClose, copyData } from "./social.js";
+import { streams } from "./reactive.js";
 import type { Side } from "./perp-core/index.js";
 
 export const bot = new Bot(appConfig.telegramToken());
 let botUsername = "PerpsPocketBot";
+
+const isGroup = (ctx: Context) => ctx.chat?.type === "group" || ctx.chat?.type === "supergroup";
+
+// A registered trader who uses the bot in a group joins that group's feed and
+// leaderboard, so their trades get posted there with a Copy button.
+bot.use(async (ctx, next) => {
+  if (isGroup(ctx) && ctx.from && users.get(ctx.from.id)) {
+    groups.join(ctx.chat!.id, ctx.from.id, "title" in ctx.chat! ? ctx.chat.title ?? null : null);
+  }
+  await next();
+});
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const usd = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
@@ -25,7 +38,7 @@ async function reply(ctx: Context, html: string, extra: Record<string, unknown> 
 
 function requireUser(ctx: Context): User {
   const u = users.get(ctx.from!.id);
-  if (!u) throw new UserError("Send /start first.");
+  if (!u) throw new UserError(`Set up first: <a href="https://t.me/${botUsername}?start=go">open @${botUsername}</a> and press Start.`);
   return u;
 }
 
@@ -66,6 +79,9 @@ This key can <b>place, cancel and reduce</b> perps orders for your DreamDEX acco
 Then: <code>/long BTC 50</code> · <code>/pos</code> · <code>/tp BTC 90000</code> · /help`;
 
 bot.command("start", safe(async (ctx) => {
+  if (isGroup(ctx)) {
+    return reply(ctx, `👋 <b>PerpsPocket</b> trades dreamDEX perps right here. Your trades post to this chat with a <b>🔁 Copy</b> button, and /top ranks the group.\n\nSet up your own key in private: <a href="https://t.me/${botUsername}?start=go">open @${botUsername}</a>`);
+  }
   let u = users.get(ctx.from!.id);
   if (!u) {
     const payload = (ctx.match ?? "").toString();
@@ -97,6 +113,11 @@ bot.command("help", safe(async (ctx) => {
 /status — margin, gas, link check
 /pnl — shareable PnL card · /top — leaderboard · /invite
 
+<b>Social</b>
+Add me to a group: your trades post there with a <b>🔁 Copy</b> button, and /top ranks the group.
+<code>/follow @trader 25</code> — copy every trade of a trader at $25
+/following · <code>/unfollow [@trader]</code>
+
 <b>Market</b>
 /markets · <code>/price SOL</code>
 
@@ -104,6 +125,7 @@ You can also just type <code>long sol 25</code>.`);
 }));
 
 bot.command("link", safe(async (ctx) => {
+  if (isGroup(ctx)) throw new UserError(`Link your wallet in private: <a href="https://t.me/${botUsername}?start=go">open @${botUsername}</a>`);
   const u = requireUser(ctx);
   const [addr] = args(ctx);
   if (!addr || !isAddress(addr)) throw new UserError("Usage: <code>/link 0xYourDreamDEXAccount</code> (the wallet you use in the app).");
@@ -128,7 +150,8 @@ async function sendStatus(ctx: Context, u: User) {
   await reply(ctx, `<b>Account</b> <code>${u.owner}</code>
 ${linkLine}
 ${gas < 0.01 ? "❌" : "✅"} Bot gas: ${gas.toFixed(4)} STT${gas < 0.01 ? " — send it some STT" : ""}
-${eq ? `💰 Perps equity: ${usd(eq.total)} (free ${usd(eq.free)}, in orders ${usd(eq.locked)})` : "💰 Equity: unavailable"}`);
+${eq ? `💰 Perps equity: ${usd(eq.total)} (free ${usd(eq.free)}, in orders ${usd(eq.locked)})` : "💰 Equity: unavailable"}
+⚡ Somnia Reactivity: ${streams().length} live mark stream(s) · 👣 ${follows.count(u.tg_id)} follower(s)`);
 }
 
 bot.command("status", safe(async (ctx) => sendStatus(ctx, requireLinked(ctx))));
@@ -229,9 +252,12 @@ bot.callbackQuery(/^go:(\d+)$/, safe(async (ctx) => {
   const status = r.resting
     ? r.filled > 0 ? `Partly filled ${r.filled} ${p.symbol}, rest resting @ ${fmtPrice(r.avgPrice)}` : `Resting limit order #${r.orderId}`
     : `Filled ${r.filled} ${p.symbol} @ ${fmtPrice(r.avgPrice)}`;
-  await reply(ctx, `✅ <b>${p.side.toUpperCase()} ${p.symbol}</b> — ${status}\nTx ${tx(r.hash)}\n\nSet protection: <code>/tp ${p.symbol} …</code> <code>/sl ${p.symbol} …</code>`, {
-    reply_markup: new InlineKeyboard().text("📊 Positions", "pos").text("🖼 PnL card", `card:${p.symbol}`),
-  });
+  const kb = isGroup(ctx)
+    ? new InlineKeyboard().text(`🔁 Copy $${Math.round(p.usd)}`, copyData(p.symbol, p.side, p.usd)).text("👣 Follow", `fl:${u.tg_id}`)
+    : new InlineKeyboard().text("📊 Positions", "pos").text("🖼 PnL card", `card:${p.symbol}`);
+  const who = isGroup(ctx) ? `${esc(u.username ? `@${u.username}` : "trader")} ` : "";
+  await reply(ctx, `✅ ${who}<b>${p.side.toUpperCase()} ${p.symbol}</b> — ${status}\nTx ${tx(r.hash)}${isGroup(ctx) ? "" : `\n\nSet protection: <code>/tp ${p.symbol} …</code> <code>/sl ${p.symbol} …</code>`}`, { reply_markup: kb });
+  if (r.filled > 0) void afterOpen(bot.api, u, p.symbol, p.side, p.usd, r, ctx.chat?.id).catch((e) => console.error("afterOpen", e));
 }));
 
 async function doClose(ctx: Context, symbol: string, fraction: number, reason = "") {
@@ -241,6 +267,7 @@ async function doClose(ctx: Context, symbol: string, fraction: number, reason = 
   trades.add({ tg_id: u.tg_id, symbol: sym, side: r.side, kind: "close", quantity: r.filled, price: r.avgPrice, tx: r.hash, pnl: r.realizedPnl });
   if (fraction >= 1) triggers.clear(u.tg_id, sym);
   await reply(ctx, `${reason}✅ Closed ${r.filled} ${sym} @ ${fmtPrice(r.avgPrice)}\nRealized ≈ <b>${signed(r.realizedPnl)}</b>\nTx ${tx(r.hash)}`);
+  if (fraction >= 1) void afterClose(bot.api, u, sym, r.realizedPnl, r.hash, ctx.chat?.id).catch((e) => console.error("afterClose", e));
 }
 
 bot.command("close", safe(async (ctx) => {
@@ -312,8 +339,8 @@ for (const kind of ["tp", "sl"] as const) {
     if (kind === "sl" && p.liqPrice && (p.side === "long" ? price <= p.liqPrice : price >= p.liqPrice)) {
       throw new UserError(`That stop is past your liquidation price (${fmtPrice(p.liqPrice)}), it would never fire.`);
     }
-    triggers.set(u.tg_id, m.info.baseSymbol, kind, price);
-    await reply(ctx, `🎯 ${kind === "tp" ? "Take-profit" : "Stop-loss"} for ${p.side} ${m.info.baseSymbol} set at <b>${fmtPrice(price)}</b>. PerpsPocket watches the mark 24/7 and closes the position when it's hit.`);
+    triggers.set(u.tg_id, m.info.baseSymbol, kind, price, p.side);
+    await reply(ctx, `🎯 ${kind === "tp" ? "Take-profit" : "Stop-loss"} for ${p.side} ${m.info.baseSymbol} set at <b>${fmtPrice(price)}</b>. PerpsPocket follows the mark live over Somnia Reactivity and closes the position the moment it's hit.`);
   }));
 }
 
@@ -355,13 +382,86 @@ bot.callbackQuery(/^card:(\w+)$/, safe(async (ctx) => {
 }));
 
 bot.command("top", safe(async (ctx) => {
-  const rows = trades.leaderboard(Date.now() - 7 * 86_400_000);
+  const since = Date.now() - 7 * 86_400_000;
+  const inGroup = isGroup(ctx);
+  const rows = inGroup ? groups.leaderboard(ctx.chat!.id, since) : trades.leaderboard(since);
   const t = trades.totals();
   if (rows.length === 0) return void (await reply(ctx, "No closed trades this week yet. Be the first: <code>/long BTC 25</code>"));
   const medal = ["🥇", "🥈", "🥉"];
-  await reply(ctx, `<b>🏆 PerpsPocket weekly leaderboard</b> (realized PnL)\n${rows
-    .map((r, i) => `${medal[i] ?? `${i + 1}.`} ${esc(r.username ?? `trader${r.tg_id % 10_000}`)} ${signed(r.pnl)} · ${r.n} closes`)
-    .join("\n")}\n\n${t.n} trades by ${t.traders} traders so far`);
+  const kb = new InlineKeyboard();
+  for (const r of rows.slice(0, 3)) kb.text(`👣 Follow ${r.username ?? `trader${r.tg_id % 10_000}`}`, `fl:${r.tg_id}`).row();
+  await reply(ctx, `<b>🏆 ${inGroup ? "This group's" : "PerpsPocket"} weekly leaderboard</b> (realized PnL)\n${rows
+    .map((r, i) => `${medal[i] ?? `${i + 1}.`} ${esc(r.username ?? `trader${r.tg_id % 10_000}`)} ${signed(r.pnl)} · ${r.n} closes · 👣 ${follows.count(r.tg_id)}`)
+    .join("\n")}\n\n${t.n} trades by ${t.traders} traders so far`, { reply_markup: kb });
+}));
+
+// ---------------------------------------------------------------- copy & follow
+
+// 🔁 Copy under a trade someone posted: the clicker gets the same order at the
+// same size, previewed and confirmed on their own account.
+bot.callbackQuery(/^cp:(\w+):([LS]):(\d+)$/, safe(async (ctx) => {
+  const [, sym, s, amt] = ctx.match as RegExpMatchArray;
+  const u = users.get(ctx.from!.id);
+  if (!u?.owner) {
+    await ctx.answerCallbackQuery({ text: "Set up PerpsPocket first (1 minute) — opening the bot", show_alert: false });
+    return void (await reply(ctx, `${esc(ctx.from!.first_name)}, set up your own key to copy trades: <a href="https://t.me/${botUsername}?start=go">open @${botUsername}</a>`));
+  }
+  await ctx.answerCallbackQuery();
+  await preview(ctx, s === "L" ? "long" : "short", sym!, Number(amt));
+}));
+
+async function startFollow(ctx: Context, leader: User, amount: number) {
+  const u = requireLinked(ctx);
+  if (leader.tg_id === u.tg_id) throw new UserError("You can't follow yourself.");
+  if (!(amount >= 5 && amount <= 10_000)) throw new UserError("Pick a size between $5 and $10,000 per copied trade.");
+  follows.set(u.tg_id, leader.tg_id, amount);
+  const name = esc(leader.username ? `@${leader.username}` : `trader${leader.tg_id % 10_000}`);
+  await bot.api
+    .sendMessage(u.tg_id, `👣 You now follow ${name}: every trade they open is copied on your account at <b>$${amount}</b>, and closed when they close.\nStop any time: <code>/unfollow</code>`, { parse_mode: "HTML" })
+    .catch(() => undefined);
+  return name;
+}
+
+bot.command("follow", safe(async (ctx) => {
+  const [who, amt] = args(ctx);
+  const replied = ctx.message?.reply_to_message?.from;
+  const leader = who?.startsWith("@") ? userByName(who) : replied ? users.get(replied.id) : undefined;
+  if (!leader) throw new UserError("Usage: <code>/follow @trader 25</code>, or reply <code>/follow 25</code> to their message. They need to be a PerpsPocket trader.");
+  const amount = Number((who?.startsWith("@") ? amt : who) ?? 25);
+  const name = await startFollow(ctx, leader, amount);
+  await reply(ctx, `👣 Following ${name} at $${amount} per trade.`);
+}));
+
+bot.callbackQuery(/^fl:(\d+)$/, safe(async (ctx) => {
+  const leader = users.get(Number((ctx.match as RegExpMatchArray)[1]));
+  if (!users.get(ctx.from!.id)?.owner) {
+    await ctx.answerCallbackQuery();
+    return void (await reply(ctx, `${esc(ctx.from!.first_name)}, set up your own key to follow traders: <a href="https://t.me/${botUsername}?start=go">open @${botUsername}</a>`));
+  }
+  if (!leader) return void (await ctx.answerCallbackQuery("Trader not found"));
+  const name = await startFollow(ctx, leader, 25);
+  await ctx.answerCallbackQuery({ text: `Following ${name.replace(/&\w+;/g, "")} at $25 per trade. /follow to change the size.`, show_alert: true });
+}));
+
+bot.command("unfollow", safe(async (ctx) => {
+  const u = requireUser(ctx);
+  const [who] = args(ctx);
+  const leader = who ? userByName(who) : undefined;
+  if (who && !leader) throw new UserError(`No PerpsPocket trader ${esc(who)}.`);
+  follows.remove(u.tg_id, leader?.tg_id);
+  await reply(ctx, leader ? `Stopped following ${esc(who!)}.` : "Stopped following everyone.");
+}));
+
+bot.callbackQuery(/^uf:(\d+)$/, safe(async (ctx) => {
+  follows.remove(ctx.from!.id, Number((ctx.match as RegExpMatchArray)[1]));
+  await ctx.answerCallbackQuery({ text: "Unfollowed", show_alert: true });
+}));
+
+bot.command("following", safe(async (ctx) => {
+  const list = follows.by(requireUser(ctx).tg_id);
+  await reply(ctx, list.length
+    ? `<b>You follow</b>\n${list.map((f) => `👣 ${esc(f.username ? `@${f.username}` : `trader${f.leader % 10_000}`)} · $${f.usd}/trade`).join("\n")}\n\n<code>/unfollow @trader</code>`
+    : "You don't follow anyone yet. Try /top and tap 👣 Follow.");
 }));
 
 bot.command("invite", safe(async (ctx) => {
@@ -372,7 +472,7 @@ bot.command("invite", safe(async (ctx) => {
 // ---------------------------------------------------------------- plain text
 
 // "long sol 25", "short eth 100 @ 2600", "close btc 50"
-bot.on("message:text", safe(async (ctx) => {
+bot.chatType("private").on("message:text", safe(async (ctx) => {
   const parts = (ctx.message?.text ?? "").trim().split(/\s+/);
   const verb = parts[0]!.toLowerCase();
   if (verb === "long" || verb === "short") {
@@ -395,6 +495,8 @@ export async function startBot() {
     { command: "sl", description: "Stop-loss: /sl BTC 80000" },
     { command: "pnl", description: "Shareable PnL card" },
     { command: "top", description: "Weekly leaderboard" },
+    { command: "follow", description: "Copy a trader: /follow @name 25" },
+    { command: "following", description: "Traders you copy" },
     { command: "markets", description: "All perp markets" },
     { command: "status", description: "Link, gas and margin check" },
     { command: "help", description: "All commands" },

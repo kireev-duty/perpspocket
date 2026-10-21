@@ -49,7 +49,25 @@ CREATE TABLE IF NOT EXISTS liq_alerts (
   sent_at INTEGER NOT NULL,
   PRIMARY KEY (tg_id, symbol)
 );
+CREATE TABLE IF NOT EXISTS follows (
+  follower   INTEGER NOT NULL,
+  leader     INTEGER NOT NULL,
+  usd        REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (follower, leader)
+);
+CREATE TABLE IF NOT EXISTS group_members (
+  chat_id INTEGER NOT NULL,
+  tg_id   INTEGER NOT NULL,
+  title   TEXT,
+  PRIMARY KEY (chat_id, tg_id)
+);
 `);
+
+// Added after the first release: the position side a TP/SL was set against, so
+// a mark push can be judged without reading the position first.
+const triggerCols = (db.prepare("PRAGMA table_info(triggers)").all() as Array<{ name: string }>).map((c) => c.name);
+if (!triggerCols.includes("side")) db.exec("ALTER TABLE triggers ADD COLUMN side TEXT");
 
 const aesKey = () => createHash("sha256").update(appConfig.masterKey()).digest();
 
@@ -83,6 +101,7 @@ export interface Trigger {
   symbol: string;
   kind: "tp" | "sl";
   price: number;
+  side: "long" | "short" | null;
 }
 
 export const users = {
@@ -118,17 +137,55 @@ export const trades = {
 };
 
 export const triggers = {
-  set: (tgId: number, symbol: string, kind: "tp" | "sl", price: number) =>
+  set: (tgId: number, symbol: string, kind: "tp" | "sl", price: number, side: "long" | "short") =>
     db
       .prepare(
-        `INSERT INTO triggers (tg_id, symbol, kind, price, active, created_at) VALUES (?, ?, ?, ?, 1, ?)
-         ON CONFLICT (tg_id, symbol, kind) DO UPDATE SET price = excluded.price, active = 1, created_at = excluded.created_at`,
+        `INSERT INTO triggers (tg_id, symbol, kind, price, side, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)
+         ON CONFLICT (tg_id, symbol, kind) DO UPDATE SET price = excluded.price, side = excluded.side, active = 1, created_at = excluded.created_at`,
       )
-      .run(tgId, symbol, kind, price, Date.now()),
+      .run(tgId, symbol, kind, price, side, Date.now()),
   forUser: (tgId: number) => db.prepare("SELECT * FROM triggers WHERE tg_id = ? AND active = 1").all(tgId) as unknown as Trigger[],
   active: () => db.prepare("SELECT * FROM triggers WHERE active = 1").all() as unknown as Trigger[],
   clear: (tgId: number, symbol: string) => db.prepare("UPDATE triggers SET active = 0 WHERE tg_id = ? AND symbol = ?").run(tgId, symbol),
 };
+
+export const follows = {
+  set: (follower: number, leader: number, usd: number) =>
+    db
+      .prepare(
+        `INSERT INTO follows (follower, leader, usd, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (follower, leader) DO UPDATE SET usd = excluded.usd`,
+      )
+      .run(follower, leader, usd, Date.now()),
+  remove: (follower: number, leader?: number) =>
+    leader === undefined
+      ? db.prepare("DELETE FROM follows WHERE follower = ?").run(follower)
+      : db.prepare("DELETE FROM follows WHERE follower = ? AND leader = ?").run(follower, leader),
+  of: (leader: number) => db.prepare("SELECT * FROM follows WHERE leader = ?").all(leader) as Array<{ follower: number; leader: number; usd: number }>,
+  by: (follower: number) =>
+    db
+      .prepare("SELECT f.leader, f.usd, u.username FROM follows f JOIN users u ON u.tg_id = f.leader WHERE f.follower = ?")
+      .all(follower) as Array<{ leader: number; usd: number; username: string | null }>,
+  count: (leader: number) => (db.prepare("SELECT COUNT(*) AS n FROM follows WHERE leader = ?").get(leader) as { n: number }).n,
+};
+
+export const groups = {
+  join: (chatId: number, tgId: number, title: string | null) =>
+    db.prepare("INSERT INTO group_members (chat_id, tg_id, title) VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET title = excluded.title").run(chatId, tgId, title),
+  /** Groups a trader has traded or talked to the bot in, so their trades can be announced there. */
+  of: (tgId: number) => (db.prepare("SELECT chat_id FROM group_members WHERE tg_id = ?").all(tgId) as Array<{ chat_id: number }>).map((r) => r.chat_id),
+  leaderboard: (chatId: number, sinceMs: number, limit = 10) =>
+    db
+      .prepare(
+        `SELECT t.tg_id, u.username, SUM(t.pnl) AS pnl, COUNT(*) AS n FROM trades t
+         JOIN users u ON u.tg_id = t.tg_id JOIN group_members g ON g.tg_id = t.tg_id AND g.chat_id = ?
+         WHERE t.pnl IS NOT NULL AND t.created_at >= ? GROUP BY t.tg_id ORDER BY pnl DESC LIMIT ?`,
+      )
+      .all(chatId, sinceMs, limit) as Array<{ tg_id: number; username: string | null; pnl: number; n: number }>,
+};
+
+export const userByName = (name: string) =>
+  db.prepare("SELECT * FROM users WHERE lower(username) = lower(?)").get(name.replace(/^@/, "")) as User | undefined;
 
 export const liqAlerts = {
   lastSent: (tgId: number, symbol: string) =>
