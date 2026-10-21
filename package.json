@@ -1,0 +1,27 @@
+{
+  "name": "perpspocket",
+  "version": "0.1.0",
+  "description": "PerpsPocket: trade dreamDEX perps on Somnia from Telegram with a linked bot key that can never withdraw",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "once": "tsx scripts/once.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.13",
+    "@somnia-chain/markets-sdk": "0.32.1",
+    "dotenv": "^18.0.8",
+    "grammy": "^1.46.0",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}
