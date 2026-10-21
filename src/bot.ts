@@ -1,7 +1,7 @@
 // Telegram front end. Commands parse, the engine trades, and every write is
 // confirmed with a button first and answered with its transaction link.
 
-import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
+import { Bot, GrammyError, InlineKeyboard, InputFile, type Context } from "grammy";
 import { getAddress, isAddress } from "viem";
 import { appConfig } from "./config.js";
 import { users, trades, triggers, follows, groups, userByName, type User } from "./db.js";
@@ -502,5 +502,20 @@ export async function startBot() {
     { command: "help", description: "All commands" },
   ]);
   bot.catch((e) => console.error("bot error", e.error));
-  void bot.start({ onStart: () => console.log(`@${botUsername} is running`) });
+  void poll();
+}
+
+// Telegram keeps the previous instance's long poll open for up to ~30 s after a
+// restart or redeploy, and grammy rejects with 409 instead of waiting it out.
+async function poll(attempt = 1): Promise<void> {
+  try {
+    await bot.start({ onStart: () => console.log(`@${botUsername} is running`) });
+  } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 409 && attempt <= 12) {
+      console.log(`another poller is still active (409), retrying in 5 s (${attempt}/12)`);
+      await new Promise((r) => setTimeout(r, 5_000));
+      return poll(attempt + 1);
+    }
+    throw err;
+  }
 }

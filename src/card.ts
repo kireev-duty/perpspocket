@@ -17,7 +17,8 @@ export interface CardInput {
 
 const W = 1200;
 const H = 630;
-const FONT = "Arial, Helvetica, sans-serif";
+// DejaVu Sans is what the Docker image ships; Arial covers Windows and macOS.
+const FONT = "Arial, Helvetica, 'DejaVu Sans', sans-serif";
 
 export function fmtPrice(p: number): string {
   if (p >= 1000) return p.toLocaleString("en-US", { maximumFractionDigits: 1 });
