@@ -30,7 +30,7 @@ The Feedback track reports are in `feedback/`, each with a repro. The main one i
 | 0–10 s | Bot chat, `/start` → bot key shown | "PerpsPocket: dreamDEX perps on Somnia, from Telegram. Each trader gets their own bot key." |
 | 10–25 s | dreamDEX app → Bot access → Link a bot → Add bot; back in Telegram `/status` ✅ | "Link it once in the app. The key can trade, but it can never withdraw." |
 | 25–40 s | `/long BTC 25` → Confirm → ✅ Filled + tx link → click the link, explorer shows success | "One message, one tap, a real order on Somnia Tokyo testnet." |
-| 40–55 s | `/pos` (PnL, liq price) → `/tp BTC …` → the TP fires with ⚡ | "Take-profit and stop-loss run on Somnia Reactivity: the mark is pushed every block and the exit fires at once." |
+| 40–55 s | `/pos` (PnL, liq price) → `/tp BTC …` → the TP fires with ⚡ | "Take-profit and stop-loss run on Somnia Reactivity: every pool event pushes the mark, evaluated in the same block, and the exit fires at once." |
 | 55–80 s | **Group chat**: your trade posted with 🔁 Copy → a second account taps Copy → Confirm → filled | "The social part: in a group, every trade comes with a Copy button. One tap and a friend is in the same trade on their own account." |
 | 80–95 s | `/follow @you 25` → you close → the follower's position closes automatically | "Or follow a trader: every open and close is mirrored at your size." |
 | 95–110 s | `/top` in the group, then `/pnl` card | "A group leaderboard and shareable PnL cards keep people coming back." |

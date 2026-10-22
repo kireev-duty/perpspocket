@@ -91,14 +91,23 @@ Placed from Telegram by the linked bot key `0x24ba…b520` for account `0x6C81�
 | Action | Market | Fill | Tx |
 | --- | --- | --- | --- |
 | `/long BTC 25` → Confirm (market IOC via `placeOrderFor`) | BTC-PERP | 0.0003 BTC @ 82,253.5 | [0xd1a8ab1a…94b0](https://explorer.testnet.somnia.network/tokyo/tx/0xd1a8ab1a5a77e76d212b40ea4e4303f2cdd5b8d8cfdd0d1060547389daa494b0) |
+| `/close BTC` (reducing IOC), realized −$0.14 | BTC-PERP | 0.0003 BTC @ 82,002.8 | [0x25f04c9e…06d0](https://explorer.testnet.somnia.network/tokyo/tx/0x25f04c9e18dba28f2ec88a51586f0dc0bbb36ba5d561e8313e742c8be69f06d0) |
+| `/short ETH 25 @ 2475` → Confirm (resting limit) | ETH-PERP | 0.0101 ETH @ 2,475, resting | [0x8a420b59…d63b](https://explorer.testnet.somnia.network/tokyo/tx/0x8a420b591b28acd600515da18e7adddee49a2a19b74fe6679096019db5dad63b) |
+| `/cancel ETH` (`cancelOrderFor`) | ETH-PERP | order cancelled | [0x6e45fe43…1c2d](https://explorer.testnet.somnia.network/tokyo/tx/0x6e45fe43b2b314a7ff3da8d68f4223c4bb5527f0312413f57f82368849ed1c2d) |
+| `/long ETH 25` → Confirm | ETH-PERP | 0.0103 ETH @ 2,405.42 | [0x6a3318de…261f](https://explorer.testnet.somnia.network/tokyo/tx/0x6a3318dedd293bcb7567bd042aa9e664ac4450711f034e6e632b6d7be480261f) |
+| `/tp ETH 2407.5` fired on a Reactivity mark push (2,407.61), realized +$0.02 | ETH-PERP | 0.0103 ETH @ 2,407.86 | [0x6c89c61f…bd53](https://explorer.testnet.somnia.network/tokyo/tx/0x6c89c61fdf1504bb441153de26df4081f1809d62c27849b00c6005ece213bd53) |
 
-The explorer shows this fill as size 0, which is the bug in `feedback/009`.
+The explorer shows the BTC fills as size 0, which is the bug in `feedback/009`.
 
 ## Screenshots
 
-| Link and status | Order filled | Positions | TP on Reactivity |
+| Link and status | Order filled | Positions | Limit order and cancel |
 | --- | --- | --- | --- |
-| ![status](docs/screenshots/02-status-linked.jpg) | ![filled](docs/screenshots/03-long-filled.jpg) | ![positions](docs/screenshots/04-pos.jpg) | ![tp](docs/screenshots/05-tp-set.jpg) |
+| ![status](docs/screenshots/02-status-linked.jpg) | ![filled](docs/screenshots/03-long-filled.jpg) | ![positions](docs/screenshots/04-pos.jpg) | ![limit](docs/screenshots/07-limit-orders.jpg) |
+
+| Close with realized PnL | TP/SL set | TP fired on Reactivity ⚡ |
+| --- | --- | --- |
+| ![close](docs/screenshots/06-close-pnl.jpg) | ![tp set](docs/screenshots/05-tp-set.jpg) | ![tp fired](docs/screenshots/10-tp-fired.jpg) |
 
 ## X posts
 
