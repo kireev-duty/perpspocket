@@ -2,6 +2,8 @@
 Severity: normal
 Area: docs
 
+> **Duplicate.** Found independently on 2026-10-21, but [NORMAL-10](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/NORMAL-10-docs-oi-cap-table-stale.md) by rohan911438 filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. Open app.testnet.dreamdex.io/docs/trading/perps-testnet, "Markets" table, column "Open interest cap". Below the table: "These figures are read from the live markets".
 2. Run `npx tsx scripts/audit.ts` in this repo to read `getPerpPoolParameters().maxOpenInterest` from every pool.

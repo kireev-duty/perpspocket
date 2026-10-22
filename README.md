@@ -118,6 +118,20 @@ The explorer shows the BTC fills as size 0, which is the bug in `feedback/009`.
 
 Correction to the Reactivity post, from [a reply in that thread](https://x.com/bratosabra/status/2113185342119375143): the mark is not pushed every block. Each event a pool emits triggers a `somnia_watch` push carrying the mark evaluated in that same block, about 38 pushes per 30 s on BTC and ETH in testing, and polling is only a fallback. The TP fill in the table above fired on one of these pushes.
 
+## Feedback track
+
+Each report in `feedback/` has steps to reproduce and evidence (tx hashes, page text or a script in `scripts/`).
+
+| Report | Area | Status |
+| --- | --- | --- |
+| [004](feedback/004-hideki-addresses-missing-operator-registry.md): Hideki address set has no OperatorPermissionsRegistry | SDK | claimed |
+| [008](feedback/008-docs-perp-gas-cost-understated.md): docs understate perp gas cost about tenfold | docs | claimed |
+| [009](feedback/009-explorer-perp-trade-size-zero.md): explorer shows perp fills as size 0 below 18 decimals | app | claimed |
+| [010](feedback/010-explorer-operator-methods-not-decoded.md): explorer doesn't decode `placeOrderFor` / `cancelOrderFor` | app | claimed |
+| [001](feedback/001-bot-kit-shannon-addresses-on-hideki.md), [002](feedback/002-sdk-perps-doc-says-only-btc-eth.md), [003](feedback/003-sdk-no-operator-perp-writes.md), [005](feedback/005-docs-position-cap-is-not-a-tenth.md), [006](feedback/006-docs-paper-usdso-column-wrong.md), [007](feedback/007-docs-open-interest-caps-stale.md) | SDK, docs | duplicates, not claimed |
+
+The six duplicates were found independently on 2026-10-21, but other builders reported the same issues a day earlier. Each file links the earlier report: [rohan911438/DreamDex-Findings](https://github.com/rohan911438/DreamDex-Findings/tree/main/feedback), and for 001 also [DanhCaTuanNgoc/lucid-perps](https://github.com/DanhCaTuanNgoc/lucid-perps/tree/main/feedback). They stay here as a record of the work.
+
 ## Roadmap
 
 - Fill notifications for resting limit orders, from the same Somnia Reactivity pool subscriptions that drive TP/SL.

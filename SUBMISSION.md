@@ -15,7 +15,7 @@ PerpsPocket is a Telegram bot for dreamDEX perps on Somnia Tokyo testnet, built 
 - **Non-custodial.** Each user gets their own bot key and links it with "Link a bot". The on-chain grant covers only placeOrderFor / cancelOrderFor / reduceOrderFor, so the key can never withdraw. A copied trade is placed by the copier's own key on the copier's own account.
 - Built on @somnia-chain/markets-sdk 0.32.1: getMaxPerpOrderSize sizing, per-market decimals and tick/lot grids, position analytics, liquidation price.
 
-The Feedback track reports are in `feedback/`, each with a repro. The main one is major: the bot kit's perp-core passes the Shannon address set on Hideki, so perp markets silently disappear when the indexer is down.
+The Feedback track reports are in `feedback/`, each with a repro. Claimed: 004 (Hideki address set has no OperatorPermissionsRegistry), 008 (docs understate perp gas cost), 009 (explorer shows perp fills as size 0 below 18 decimals) and 010 (explorer doesn't decode placeOrderFor / cancelOrderFor). Six more were found independently but had been reported a day earlier by other builders. They are marked as duplicates with links to the earlier reports and are not claimed.
 
 **Repo:** https://github.com/kireev-duty/perpspocket
 **Bot:** https://t.me/PerpsPocketBot

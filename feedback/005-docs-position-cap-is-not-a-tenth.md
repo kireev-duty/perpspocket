@@ -2,6 +2,8 @@
 Severity: normal
 Area: docs
 
+> **Duplicate.** Found independently on 2026-10-21, but [NORMAL-10](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/NORMAL-10-docs-oi-cap-table-stale.md) by rohan911438 filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. Read the trader docs, app.testnet.dreamdex.io/docs/trading/perps-testnet: "A single account is capped at a tenth of it on most markets."
 2. Read the developer docs, app.testnet.dreamdex.io/docs/developers/perps-testnet, "Common pitfalls": "Each account has a position cap per market, a tenth of the market's open interest cap on most markets."

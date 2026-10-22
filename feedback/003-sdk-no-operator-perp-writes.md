@@ -2,6 +2,8 @@
 Severity: normal
 Area: SDK
 
+> **Duplicate.** Found independently on 2026-10-21, but [NORMAL-08](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/NORMAL-08-sdk-perp-write-abi-missing-operator-functions.md) by rohan911438 filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. Follow "Trade an app wallet with a bot" in the dev docs: link a bot key to an app wallet with Link a Bot.
 2. Try to place an order for the linked wallet with `@somnia-chain/markets-sdk@0.32.1`.

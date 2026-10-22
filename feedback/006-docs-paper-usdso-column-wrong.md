@@ -2,6 +2,8 @@
 Severity: normal
 Area: docs
 
+> **Duplicate.** Found independently on 2026-10-21, but [NORMAL-20](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/NORMAL-20-docs-paper-usdso-market-restriction-not-in-effect.md) by rohan911438 filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. Open app.testnet.dreamdex.io/docs/trading/perps-testnet, "Markets" table. The "Paper USDso" column says **No** for 1000PEPE-PERP, LIT-PERP, PUMP-PERP, VVV-PERP, ZEC-PERP and ZRO-PERP. The margin page says the same: "The six newest markets are not on that list."
 2. Ask the contract. `MarginBank.isVoucherMarketAllowed(pool)` at `0x478769E1177C0773c43A593DCCc4Ad15F15F1394` is what `client.getPerpLeverage(...).voucherMarketAllowed` returns, and the voucher gate in `previewPerpOrderMargin` / `getMaxPerpOrderSize` uses it.

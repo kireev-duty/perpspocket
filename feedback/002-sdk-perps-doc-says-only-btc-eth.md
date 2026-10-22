@@ -2,6 +2,8 @@
 Severity: normal
 Area: docs
 
+> **Duplicate.** Found independently on 2026-10-21, but [NORMAL-11](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/NORMAL-11-docs-sdk-perps-guide-stale.md) by rohan911438 filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. `npm i @somnia-chain/markets-sdk@0.32.1`
 2. Open `node_modules/@somnia-chain/markets-sdk/docs/PERPS.md`. The first paragraph says: "Perps are live on testnet: `BTC/USDSO:USDSO` and `ETH/USDSO:USDSO`".

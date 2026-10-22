@@ -2,6 +2,8 @@
 Severity: major
 Area: SDK
 
+> **Duplicate.** Found independently on 2026-10-21, but [MAJOR-03](https://github.com/rohan911438/DreamDex-Findings/blob/main/feedback/MAJOR-03-botkit-shannon-addresses-on-hideki.md) by rohan911438 (and [issue-01](https://github.com/DanhCaTuanNgoc/lucid-perps/blob/main/feedback/issue-01-loadmarkets-empty-addresses.md) by DanhCaTuanNgoc) filed on 2026-10-20 covers the same issue and was first. Kept here as a record of the work; not claimed for payment.
+
 ## Steps to reproduce
 1. `npm i @somnia-chain/markets-sdk@0.32.1`
 2. Build `SomniaMarkets` for Hideki (`hidekiTestnet`, chain 50383) with an indexer that is unreachable, so the documented chain fallback is used. Pass an address set whose `perpPoolFactory` has no perp pools on this chain. For example, `SOMNIA_TESTNET_ADDRESSES` (Shannon), which is exactly what `dreamdex-bot-kit/packages/perp-core/src/exchange.ts` passes on Hideki today.
