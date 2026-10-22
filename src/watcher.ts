@@ -15,8 +15,11 @@ import { fmtPrice } from "./card.js";
 import { bot } from "./bot.js";
 import { afterClose } from "./social.js";
 import { follow, onMark, streams } from "./reactive.js";
+import { StepTimeout, within } from "./timeout.js";
 
 const STALE_PUSH_MS = 20_000;
+/** Covers a trigger close (reads plus a write with its receipt) with room to spare. */
+const TICK_TIMEOUT_MS = 180_000;
 
 let tick = 0;
 let polling = false;
@@ -133,11 +136,14 @@ export function startWatcher() {
     if (polling) return;
     polling = true;
     try {
-      await followTriggeredMarkets();
-      await pollTriggers();
-      if (tick++ % 4 === 0) await checkLiquidations();
+      // A tick that never settles would leave `polling` set and stop the fallback for good.
+      await within("watcher tick", TICK_TIMEOUT_MS, (async () => {
+        await followTriggeredMarkets();
+        await pollTriggers();
+        if (tick++ % 4 === 0) await checkLiquidations();
+      })());
     } catch (err) {
-      console.error("watcher", err);
+      console.error("watcher", err instanceof StepTimeout ? err.message : err);
     } finally {
       polling = false;
     }

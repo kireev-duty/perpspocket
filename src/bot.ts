@@ -10,6 +10,7 @@ import { UserError } from "./engine.js";
 import { pnlCard, fmtPrice } from "./card.js";
 import { afterOpen, afterClose, copyData } from "./social.js";
 import { streams } from "./reactive.js";
+import { StepTimeout, within } from "./timeout.js";
 import type { Side } from "./perp-core/index.js";
 
 export const bot = new Bot(appConfig.telegramToken());
@@ -48,13 +49,30 @@ function requireLinked(ctx: Context): User {
   return u;
 }
 
-/** Run a handler and turn failures into a message instead of a dead chat. */
+/** Longest a handler may hold the update queue; engine steps have their own, shorter deadlines. */
+const HANDLER_TIMEOUT_MS = 150_000;
+
+const describe = (ctx: Context) =>
+  `${ctx.from?.id ?? "?"} ${ctx.message?.text?.split(/\s+/).slice(0, 3).join(" ") ?? `btn:${ctx.callbackQuery?.data ?? "?"}`}`;
+
+/**
+ * Run a handler and turn failures into a message instead of a dead chat. The
+ * deadline frees the update queue even if an RPC call never settles.
+ */
 function safe(fn: (ctx: Context) => Promise<unknown>) {
   return async (ctx: Context) => {
+    const what = describe(ctx);
+    const started = Date.now();
     try {
-      await fn(ctx);
+      await within(`handler ${what}`, HANDLER_TIMEOUT_MS, fn(ctx));
+      console.log(`ok ${what} (${Date.now() - started} ms)`);
     } catch (err) {
+      console.log(`fail ${what} (${Date.now() - started} ms)`);
       if (err instanceof UserError) return void (await reply(ctx, `⚠️ ${err.message}`));
+      if (err instanceof StepTimeout) {
+        console.error(err.message);
+        return void (await reply(ctx, `⏳ Somnia is slow to answer (${esc(err.label)}). An order may still land: check /pos before you retry.`));
+      }
       console.error(err);
       const msg = err instanceof Error ? err.message.split("\n")[0]!.slice(0, 300) : String(err);
       await reply(ctx, `❌ Something went wrong: <code>${esc(msg)}</code>`);

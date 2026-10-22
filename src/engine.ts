@@ -27,6 +27,7 @@ import {
 } from "./perp-core/index.js";
 import { appConfig } from "./config.js";
 import { decrypt, encrypt, type User } from "./db.js";
+import { within } from "./timeout.js";
 
 const config = loadConfig();
 const chain = makeChain(config);
@@ -40,6 +41,10 @@ export const exchange = new SomniaMarkets({
 
 /** Thrown for anything the user can fix; the bot shows `message` as-is. */
 export class UserError extends Error {}
+
+/** Deadlines for the steps of a trade: chain reads, and a write including its receipt. */
+const READ_MS = 30_000;
+const WRITE_MS = 90_000;
 
 // ---------------------------------------------------------------- markets
 
@@ -226,22 +231,27 @@ export async function open(
   notionalUsd: number,
   limitPrice?: number,
 ): Promise<TradeResult> {
-  const m = await market(symbol);
+  const m = await within("read markets", READ_MS, market(symbol));
   const key = keyFor(user);
-  const status = await linkStatus(key, m.info.poolAddress);
+  const tag = `${side} ${m.info.baseSymbol}`;
+  const status = await within(`${tag}: link check`, READ_MS, linkStatus(key, m.info.poolAddress));
   if (!status.place) throw new UserError(`Your bot key is not linked for ${m.display}. In the app: wallet → Link a bot → add ${key.operator} again.`);
 
-  const price = limitPrice ? alignPrice(toRaw(limitPrice, 18), m.info) : await takerPrice(m, side);
-  const wanted = sizeForNotional(notionalUsd, m.info, limitPrice ?? (await mark(m)));
+  const price = limitPrice ? alignPrice(toRaw(limitPrice, 18), m.info) : await within(`${tag}: book`, READ_MS, takerPrice(m, side));
+  const wanted = sizeForNotional(notionalUsd, m.info, limitPrice ?? (await within(`${tag}: mark`, READ_MS, mark(m))));
   if (wanted === 0n) {
     const min = fromRaw(m.info.minQuantity, m.info.baseDecimals);
     throw new UserError(`$${notionalUsd} is below ${m.display}'s minimum size of ${min} ${m.info.baseSymbol}.`);
   }
-  const sized = await sizeOrder(exchange, { market: m, account: key.owner, side, price, wanted, tradingKey: key });
+  const sized = await within(`${tag}: sizing`, READ_MS, sizeOrder(exchange, { market: m, account: key.owner, side, price, wanted, tradingKey: key }));
   if (!sized.ok) throw new UserError(`Can't place: ${sized.reason}.`);
 
   const orderType = limitPrice ? ORDER_TYPE.LIMIT : ORDER_TYPE.MARKET;
-  const res = await placeFor(key, { pool: m.info.poolAddress, isBid: side === "long", price, quantity: sized.quantity, orderType }).catch(friendly);
+  const res = await within(
+    `${tag}: placeOrderFor`,
+    WRITE_MS,
+    placeFor(key, { pool: m.info.poolAddress, isBid: side === "long", price, quantity: sized.quantity, orderType }),
+  ).catch(friendly);
   return summarize(res, m, side, sized.quantity, price, orderType === ORDER_TYPE.LIMIT);
 }
 
@@ -273,10 +283,15 @@ export interface CloseResult extends TradeResult {
 
 /** Close `fraction` of the position with a reducing IOC. */
 export async function close(user: User, symbol: string, fraction = 1): Promise<CloseResult> {
-  const m = await market(symbol);
+  const m = await within("read markets", READ_MS, market(symbol));
   const key = keyFor(user);
   const bank = m.info.marginBank;
-  const pos = await exchange.client.getPerpPositionAnalytics({ marginBank: bank, account: key.owner, pool: m.info.poolAddress });
+  const tag = `close ${m.info.baseSymbol}`;
+  const pos = await within(
+    `${tag}: position`,
+    READ_MS,
+    exchange.client.getPerpPositionAnalytics({ marginBank: bank, account: key.owner, pool: m.info.poolAddress }),
+  );
   if (pos.size === 0n) throw new UserError(`No open ${m.display} position.`);
   const abs = pos.size < 0n ? -pos.size : pos.size;
   const lot = BigInt(m.info.lotSize);
@@ -287,11 +302,17 @@ export async function close(user: User, symbol: string, fraction = 1): Promise<C
   }
 
   const side: Side = pos.size > 0n ? "short" : "long";
-  const preview = await exchange.client
-    .previewPerpClosePnl({ pool: m.info.poolAddress, marginBank: bank, account: key.owner, quantity: qty })
-    .catch(() => undefined);
-  const price = await takerPrice(m, side);
-  const res = await placeFor(key, { pool: m.info.poolAddress, isBid: side === "long", price, quantity: qty, orderType: ORDER_TYPE.MARKET }).catch(friendly);
+  const preview = await within(
+    `${tag}: PnL preview`,
+    READ_MS,
+    exchange.client.previewPerpClosePnl({ pool: m.info.poolAddress, marginBank: bank, account: key.owner, quantity: qty }),
+  ).catch(() => undefined);
+  const price = await within(`${tag}: book`, READ_MS, takerPrice(m, side));
+  const res = await within(
+    `${tag}: placeOrderFor`,
+    WRITE_MS,
+    placeFor(key, { pool: m.info.poolAddress, isBid: side === "long", price, quantity: qty, orderType: ORDER_TYPE.MARKET }),
+  ).catch(friendly);
   const out = summarize(res, m, side, qty, price, false);
   const realizedPnl = preview && preview.priceable ? fromRaw(preview.netProceeds, 18) : 0;
   return { ...out, realizedPnl };
@@ -299,9 +320,13 @@ export async function close(user: User, symbol: string, fraction = 1): Promise<C
 
 export async function cancelAll(user: User, symbol?: string): Promise<`0x${string}`[]> {
   const key = keyFor(user);
-  const orders = (await openOrders(user)).filter((o) => !symbol || o.market.info.baseSymbol === (symbol.toUpperCase()));
+  const orders = (await within("cancel: open orders", READ_MS, openOrders(user))).filter(
+    (o) => !symbol || o.market.info.baseSymbol === symbol.toUpperCase(),
+  );
   const hashes: `0x${string}`[] = [];
-  for (const o of orders) hashes.push(await cancelFor(key, o.market.info.poolAddress, o.orderId).catch(friendly));
+  for (const o of orders) {
+    hashes.push(await within(`cancel ${o.market.info.baseSymbol}: cancelOrderFor`, WRITE_MS, cancelFor(key, o.market.info.poolAddress, o.orderId)).catch(friendly));
+  }
   return hashes;
 }
 

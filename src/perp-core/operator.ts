@@ -59,6 +59,9 @@ const OPERATOR_ABI = [
 /** The same gas the SDK sends a perp order with. Somnia bills gas used, not the limit. */
 const ORDER_GAS = 10_000_000n;
 
+/** Somnia confirms in well under a second; a minute without a receipt means the tx is stuck or dropped. */
+const RECEIPT_TIMEOUT_MS = 60_000;
+
 /** The SDK's resting-order expiry: fifty years out, in nanoseconds. */
 function farFutureNs(): bigint {
   return BigInt(Math.floor(Date.now() / 1000) + 50 * 365 * 24 * 3600) * 1_000_000_000n;
@@ -155,7 +158,12 @@ async function send(
     gas: ORDER_GAS,
   });
   const hash = await key.walletClient.writeContract(request as never);
-  const receipt = await key.publicClient.waitForTransactionReceipt({ hash });
+  // PerpsPocket: log the hash before waiting and bound the wait, so a tx that
+  // never lands surfaces as an error naming it instead of a silent stall.
+  console.log(`sent ${functionName} for ${key.owner}: ${hash}`);
+  const receipt = await key.publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS }).catch((err) => {
+    throw new Error(`${functionName} tx ${hash} was sent but not confirmed within ${RECEIPT_TIMEOUT_MS / 1000} s: ${(err as Error).message.split("\n")[0]}`);
+  });
   if (receipt.status !== "success") {
     throw new Error(`${functionName} REVERTED on-chain (tx ${hash}).`);
   }

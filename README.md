@@ -66,7 +66,8 @@ SQLite (node:sqlite): users, encrypted keys, trades with tx hashes, triggers, fo
 - Prices and quantities are converted with each market's own decimals (6 to 24) and aligned to the tick and lot grid.
 - Market orders cross the touch with configurable slippage (default 0.5%), so an IOC doesn't revert `ImmediateOrCancelNoFill` when the book moves.
 - Close size comes from the on-chain position. PnL comes from `listPerpPositionAnalytics`, and liquidation price from `getLiquidationPrice`.
-- `src/perp-core/` is vendored from the MIT-licensed [dreamdex-bot-kit](https://github.com/somnia-chain/dreamdex-bot-kit), with one fix: it uses the Hideki address set on Hideki (see `feedback/001`).
+- No step can freeze the bot. Telegram updates run one at a time, so every chain read has a 30 s deadline, every write 90 s (its receipt wait is capped at 60 s and the hash is logged as soon as it is sent), and each handler 150 s. A watcher tick that overruns is cut off, so the TP/SL fallback keeps running. Each command logs its outcome and duration, and any step slower than 5 s is logged by name.
+- `src/perp-core/` is vendored from the MIT-licensed [dreamdex-bot-kit](https://github.com/somnia-chain/dreamdex-bot-kit), with two changes: it uses the Hideki address set on Hideki (see `feedback/001`), and `operator.ts` bounds the receipt wait.
 
 ## Run it
 
