@@ -86,20 +86,31 @@ Without Telegram, `npm run once -- BTC long 25` / `npm run once -- BTC close` / 
 
 ## Live on Somnia Tokyo testnet
 
-| Action | Tx |
-| --- | --- |
-| _filled after the first live session_ | |
+Placed from Telegram by the linked bot key `0x24ba…b520` for account `0x6C81…730F`.
+
+| Action | Market | Fill | Tx |
+| --- | --- | --- | --- |
+| `/long BTC 25` → Confirm (market IOC via `placeOrderFor`) | BTC-PERP | 0.0003 BTC @ 82,253.5 | [0xd1a8ab1a…94b0](https://explorer.testnet.somnia.network/tokyo/tx/0xd1a8ab1a5a77e76d212b40ea4e4303f2cdd5b8d8cfdd0d1060547389daa494b0) |
+
+The explorer shows this fill as size 0, which is the bug in `feedback/009`.
+
+## Screenshots
+
+| Link and status | Order filled | Positions | TP on Reactivity |
+| --- | --- | --- | --- |
+| ![status](docs/screenshots/02-status-linked.jpg) | ![filled](docs/screenshots/03-long-filled.jpg) | ![positions](docs/screenshots/04-pos.jpg) | ![tp](docs/screenshots/05-tp-set.jpg) |
 
 ## X posts
 
-- _link 1_
-- _link 2_
-- _link 3_
+- [Perps are better with friends: group trading with Copy and Follow](https://x.com/bratosabra/status/2113180781887754584)
+- [TP/SL on Somnia Reactivity](https://x.com/bratosabra/status/2113180975559561249)
+- [First live dreamDEX perp from Telegram, with the tx](https://x.com/bratosabra/status/2113181117389901839)
 
 ## Roadmap
 
-- Somnia Reactivity subscriptions to pool events, for instant fill notifications instead of polling.
-- Copy-trading: follow a top trader from `/top` with your own size.
+- Fill notifications for resting limit orders, from the same Somnia Reactivity pool subscriptions that drive TP/SL.
+- Copy-trading limits: a max size per leader and a daily loss cap for followers.
+- A Telegram Mini App for the order ticket and the positions view.
 - Mainnet as soon as dreamDEX perps launch there.
 
 ## License
