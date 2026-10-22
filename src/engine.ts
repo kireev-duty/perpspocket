@@ -314,7 +314,18 @@ export async function close(user: User, symbol: string, fraction = 1): Promise<C
     placeFor(key, { pool: m.info.poolAddress, isBid: side === "long", price, quantity: qty, orderType: ORDER_TYPE.MARKET }),
   ).catch(friendly);
   const out = summarize(res, m, side, qty, price, false);
-  const realizedPnl = preview && preview.priceable ? fromRaw(preview.netProceeds, 18) : 0;
+  // The preview prices the close at the mark, but the IOC fills at the book plus
+  // slippage. Take the price move from the actual fill, and funding plus fee
+  // (which barely depend on the fill price) from the preview.
+  const priced = preview && preview.priceable ? preview : undefined;
+  let realizedPnl = 0;
+  if (out.filled > 0 && pos.priceable) {
+    const direction = pos.size > 0n ? 1 : -1;
+    const gross = (out.avgPrice - fromRaw(pos.avgEntryPrice, 18)) * out.filled * direction;
+    realizedPnl = gross - (priced ? fromRaw(priced.fundingSettled + priced.fee, 18) : 0);
+  } else if (out.filled > 0 && priced) {
+    realizedPnl = fromRaw(priced.netProceeds, 18);
+  }
   return { ...out, realizedPnl };
 }
 
