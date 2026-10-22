@@ -116,6 +116,8 @@ The explorer shows the BTC fills as size 0, which is the bug in `feedback/009`.
 - [TP/SL on Somnia Reactivity](https://x.com/bratosabra/status/2113180975559561249)
 - [First live dreamDEX perp from Telegram, with the tx](https://x.com/bratosabra/status/2113181117389901839)
 
+Correction to the Reactivity post, from [a reply in that thread](https://x.com/bratosabra/status/2113185342119375143): the mark is not pushed every block. Each event a pool emits triggers a `somnia_watch` push carrying the mark evaluated in that same block, about 38 pushes per 30 s on BTC and ETH in testing, and polling is only a fallback. The TP fill in the table above fired on one of these pushes.
+
 ## Roadmap
 
 - Fill notifications for resting limit orders, from the same Somnia Reactivity pool subscriptions that drive TP/SL.
